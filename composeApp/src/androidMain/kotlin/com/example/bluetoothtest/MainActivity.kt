@@ -9,15 +9,22 @@ import androidx.core.app.ActivityCompat
 import com.example.bluetoothtest.App
 
 class MainActivity : ComponentActivity() {
+    private lateinit var bluetoothService: AndroidBluetoothService
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         requestBluetoothPermissions()
 
-        val bluetoothService = AndroidBluetoothService(this)
+        bluetoothService = AndroidBluetoothService(this)
         setContent {
             App(bluetoothService)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        bluetoothService.disconnectAll()
     }
 
     private fun requestBluetoothPermissions() {

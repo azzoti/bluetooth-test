@@ -1,5 +1,6 @@
 package com.example.bluetoothtest
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +16,7 @@ import androidx.compose.material.TabRow
 import androidx.compose.material.Text
 import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -24,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -63,17 +66,27 @@ fun App(bluetoothService: BluetoothService) {
 @Composable
 fun DevicesTab(bluetoothService: BluetoothService) {
     var isScanning by remember { mutableStateOf(false) }
-    val devices = remember { mutableStateListOf<BluetoothDevice>() }
+    val myDevices = remember { mutableStateListOf<BluetoothDevice>() } // Initially empty
+    val otherDevices = remember { mutableStateListOf<BluetoothDevice>() }
     val scope = rememberCoroutineScope()
+
+    // Disconnect when this composable leaves the composition (e.g. app close or tab switch if not preserved)
+    // Note: To truly handle app exit, it's better done in the Activity/ViewController lifecycle, 
+    // but DisposableEffect here handles tab switching or if the view is destroyed.
+    DisposableEffect(Unit) {
+        onDispose {
+            bluetoothService.disconnectAll()
+        }
+    }
 
     fun startScan() {
         if (isScanning) return
         isScanning = true
-        devices.clear()
+        otherDevices.clear()
         bluetoothService.startScan { device ->
             // Update list, avoid duplicates if needed
-            if (devices.none { it.address == device.address }) {
-                devices.add(device)
+            if (otherDevices.none { it.address == device.address } && myDevices.none { it.address == device.address }) {
+                otherDevices.add(device)
             }
         }
         
@@ -88,6 +101,20 @@ fun DevicesTab(bluetoothService: BluetoothService) {
         startScan()
     }
 
+    fun onDeviceClicked(device: BluetoothDevice) {
+        if (device.name == "Oralable" || device.name == "ANR M40") {
+            // Check if already in my devices to avoid duplicates
+            if (myDevices.none { it.address == device.address }) {
+                otherDevices.remove(device)
+                myDevices.add(device)
+                
+                bluetoothService.connect(device.address) { services ->
+                     // Log handled in service
+                }
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Button(
             onClick = { startScan() },
@@ -98,15 +125,57 @@ fun DevicesTab(bluetoothService: BluetoothService) {
         }
 
         LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 16.dp)) {
-            items(devices) { device ->
-                Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                    Column {
-                        Text(text = device.name ?: "Unknown Device", style = MaterialTheme.typography.h6)
-                        Text(text = device.address, style = MaterialTheme.typography.body2)
-                        Text(text = "RSSI: ${device.rssi}", style = MaterialTheme.typography.caption)
-                    }
+            item {
+                Text(
+                    text = "My Devices",
+                    style = MaterialTheme.typography.h6,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+            
+            if (myDevices.isEmpty()) {
+                item {
+                    Text(
+                        text = "No devices added yet.",
+                        style = MaterialTheme.typography.body2,
+                        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                    )
+                }
+            } else {
+                items(myDevices) { device ->
+                    DeviceItem(device, onClick = { /* Already connected */ })
                 }
             }
+
+            item {
+                Text(
+                    text = "Other Devices",
+                    style = MaterialTheme.typography.h6,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 0.dp, top = 24.dp, end = 0.dp, bottom = 8.dp)
+                )
+            }
+            
+            items(otherDevices) { device ->
+                DeviceItem(device, onClick = { onDeviceClicked(device) })
+            }
+        }
+    }
+}
+
+@Composable
+fun DeviceItem(device: BluetoothDevice, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(8.dp)
+    ) {
+        Column {
+            Text(text = device.name ?: "Unknown Device", style = MaterialTheme.typography.subtitle1)
+            Text(text = device.address, style = MaterialTheme.typography.body2)
+            Text(text = "RSSI: ${device.rssi}", style = MaterialTheme.typography.caption)
         }
     }
 }

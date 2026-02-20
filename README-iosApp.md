@@ -58,3 +58,14 @@ Replace the content of `ContentView.swift` and `iosAppApp.swift` with the provid
 1.  Connect your iPhone or select a Simulator.
 2.  Press **Cmd + R** to run.
 3.  If you get a deployment target error, lower the Deployment Target in **General > Minimum Deployments** to iOS 15.0.
+
+## How it Works: Xcode & Kotlin
+You might wonder why Xcode is involved with Kotlin code. Here is the flow:
+
+1.  **Xcode "Run Script" Phase**: When you click build/run in Xcode, the first thing it does (because we put it first) is execute:
+    `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode`
+2.  **Gradle & Kotlin/Native Compiler**: This Gradle task invokes the Kotlin/Native compiler. The compiler takes your Kotlin code (`commonMain` + `iosMain`) and compiles it into an **Apple Framework** (binary machine code for iOS ARM64).
+3.  **Linking**: Xcode then takes this generated framework (`ComposeApp.framework`) and links it into your iOS app executable, just like it would with any other Swift or Objective-C library.
+4.  **Swift Interop**: Your Swift code (`ContentView.swift`) calls the Kotlin code (exposed as Objective-C headers in the framework), allowing the UI to launch.
+
+So, Xcode isn't *compiling* the Kotlin code itself; it's asking Gradle to do it, and then consuming the result.
